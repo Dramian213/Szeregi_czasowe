@@ -11,7 +11,7 @@ editor: visual
 
 ### Cel Projektu:
 
-Porównanie oraz analiza zachowania cen akcji Chevron i Valero Energy w czasie od 2015 roku.
+Porównanie oraz analiza zachowania cen akcji Chevron i Valero Energy w czasie od 2010 roku do \[ostatni moment pobranie danych\].
 
 ### Użyte biblioteki
 
