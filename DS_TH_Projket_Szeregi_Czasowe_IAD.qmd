@@ -22,7 +22,7 @@ library(tseries)
 library(zoo)
 ```
 
-### Pobranie danych 
+### Pobranie danych
 
 Dane pozyskaliśmy z Yahoofinance
 
