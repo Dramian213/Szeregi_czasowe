@@ -1,0 +1,46 @@
+---
+title: "IAD Projekt Szeregi Czasowe"
+author: "Damian Spodar & Tomasz Hanusek gc1"
+format: 
+   pdf:
+    fontsize: 9pt
+editor: visual
+---
+
+# Analiza Szeregów Czasowych cen akcji Chevron oraz Valero Energy
+
+### Cel Projektu:
+
+Porównanie oraz analiza zachowania cen akcji Chevron i Valero Energy w czasie od 2015 roku.
+
+### Użyte biblioteki
+
+```{r message=FALSE, warning=FALSE}
+library(quantmod)
+library(forecast)
+library(tseries)
+library(zoo)
+```
+
+### Pobranie danych 
+
+Dane pozyskaliśmy z Yahoofinance
+
+```{r}
+getSymbols(c("CVX", "VLO"), 
+           src = "yahoo",
+           from = "2010-01-01", 
+           to = Sys.Date())
+```
+
+```{r}
+cvx_m <- monthlyReturn(Ad(CVX), type="log")
+vlo_m <- monthlyReturn(Ad(VLO), type="log")
+```
+
+```{r}
+cvx_ts <- ts(cvx_m, frequency = 12,
+             start = c(2010,1))
+vlo_ts <- ts(vlo_m, frequency = 12,
+             start = c(2010,1))
+```
