@@ -9,17 +9,17 @@ editor: visual
 
 # Analiza Szeregów Czasowych dla cen akcji Chevron oraz Valero Energy
 
-### Cel Projektu:
+### Cel Projektu
 
 Celem projektu jest analiza szeregów czasowych cen akcji spółek energetycznych Chevron (CVX) oraz Valero Energy (VLO). Analiza pozwala zarówno zrozumieć zachowanie cen w okresie od początku 2022 roku, jak i porównać dynamikę dwóch dużych spółek sektora energetycznego.
 
-### Krótki opis Spólek
+### Krótki opis spółek
 
-Chevron (CVX)
+Chevron (CVX):
 
 :   *Amerykańska spółka z branży energetycznej, zajmująca się wydobyciem, rafinacją i sprzedażą ropy naftowej oraz gazu ziemnego. Chevron należy do największych producentów energii na świecie, a jego akcje są notowane na giełdzie NYSE. Firma charakteryzuje się stabilną obecnością w sektorze upstream i downstream oraz znaczącym udziałem w globalnym rynku ropy.*
 
-Valero Energy (VLO)
+Valero Energy (VLO):
 
 :   *Amerykańska spółka rafineryjna i dystrybutor paliw, koncentrująca się na przetwórstwie ropy naftowej i produkcji paliw, w tym benzyny, oleju napędowego i biopaliw. Valero posiada rafinerie w Stanach Zjednoczonych i Kanadzie, a jej akcje są również notowane na giełdzie NYSE. Firma jest jednym z największych niezależnych producentów paliw na świecie i charakteryzuje się dużą zmiennością przychodów ze względu na wahania cen ropy i popytu na paliwa.*
 
