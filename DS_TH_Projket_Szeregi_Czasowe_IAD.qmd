@@ -11,7 +11,7 @@ editor: visual
 
 ### Cel Projektu
 
-Celem projektu jest analiza szeregów czasowych cen akcji spółek energetycznych Chevron (CVX) oraz Valero Energy (VLO). Analiza pozwala zarówno zrozumieć zachowanie cen w okresie od początku 2022 roku, jak i porównać dynamikę dwóch dużych spółek sektora energetycznego.
+Celem projektu jest analiza szeregów czasowych cen akcji spółek energetycznych Chevron (CVX) oraz Valero Energy (VLO). Analiza pozwala zrozumieć zachowanie cen w okresie od początku 2022 roku, zweryfikować charakter trendu (deterministyczny vs. stochastyczny) oraz porównać dynamikę dwóch dużych spółek sektora energetycznego. Kluczowym elementem jest budowa modelu prognostycznego klasy ARIMA poprzedzona weryfikacją stacjonarności.
 
 ### Krótki opis spółek
 
@@ -30,9 +30,6 @@ library(quantmod)
 library(forecast)
 library(tseries)
 library(lmtest)
-```
-
-```{r message=FALSE, warning=FALSE, echo=FALSE}
 library(FinTS)
 library(rugarch)
 ```
@@ -43,10 +40,10 @@ library(rugarch)
 
 ### Pobranie danych
 
-Dane cen akcji Chevron (CVX) pobrano z serwisu Yahoo Finance w okresie od początku 2022 do końca 2024 roku . Do analizy wykorzystano ceny zamknięcia, które są standardową zmienną w badaniach finansowych i dobrze odzwierciedlają codzienne wahania wartości akcji. Dodatkowo obliczono logarytmiczne stopy zwrotu, które ułatwiają modelowanie zmienności i stosowanie modeli ARIMA.
+Dane cen akcji Chevron (CVX) pobrano z serwisu Yahoo Finance w okresie od 01.01.2022 do 20.01.2026. Do analizy wykorzystano ceny zamknięcia (Close), które są standardem w badaniach finansowych i dobrze odzwierciedlają codzienne wahania wartości akcji. Dodatkowo obliczono logarytmiczne stopy zwrotu, które ułatwiają modelowanie zmienności i stosowanie modeli ARIMA.
 
 ```{r, echo= FALSE, message=FALSE, warning=FALSE,fig.show="hide"}
-getSymbols("CVX", src = "yahoo", from = "2022-01-01")
+getSymbols("CVX", src = "yahoo", from = "2022-01-01", to = "2026-01-21")
 
 
 prices <- Cl(CVX) # ceny zamknięcia
@@ -57,7 +54,7 @@ t <- 1:length(prices)
 
 ## Analiza trendu - wybór stopnia wielomianu przez AIC
 
-W celu identyfikacji trendu w szeregu czasowym cen akcji Chevron dopasowano modele trendu wielomianowego o różnych stopniach. Do wyboru najlepszego modelu wykorzystano kryterium informacyjne Akaike (AIC).
+W pierwszym kroku podjęto próbę opisu szeregu za pomocą deterministycznego modelu trendu wielomianowego. Do wyboru najlepszego modelu wykorzystano kryterium informacyjne Akaike (AIC).
 
 Uzyskane wartości AIC dla kolejnych stopni wielomianu były następujące:
 
@@ -72,48 +69,70 @@ AIC_values[i] <- AIC(model)
 models[[i]] <- model
 }
 
+cat("Wartości AIC dla kolejnych stopni wielomianu:\n")
+print(AIC_values)
 
-AIC_values
 best_degree <- which.min(AIC_values)
-best_degree
+cat("\nNajlepszy stopień wielomianu wg AIC:", best_degree, "\n")
 
 best_model <- models[[best_degree]]
 lines(fitted(best_model), col="red", lwd=3)
-
 ```
 
-Najniższą wartość AIC uzyskano dla wielomianu 10 stopnia, co oznacza, że to właśnie ten model najlepiej opisuje długookresowy trend cen akcji Chevron spośród rozważanych specyfikacji. Świadczy to o nieliniowym i złożonym charakterze trendu, typowym dla rynków finansowych, gdzie ceny reagują na zmienne warunki ekonomiczne, geopolityczne oraz sektorowe.
+**Wnioski i krytyka podejścia**: Najniższą wartość AIC uzyskano dla wielomianu 10. stopnia. Choć matematycznie model ten najlepiej dopasowuje się do danych historycznych, w kontekście finansowym wskazuje to na zjawisko "przeuczenia" (overfitting). Ceny akcji zazwyczaj charakteryzują się trendem stochastycznym (błądzenie losowe), a nie deterministycznym. Wysoki stopień wielomianu próbuje na siłę opisać losowe fluktuacje jako stałe prawo, co zweryfikujemy badając reszty tego modelu.
 
-## Analiza sezonowości
+# Analiza sezonowości
 
-Sezonowość została zbadana za pomocą ACF oraz dekompozycji:
+Sezonowość została zbadana za pomocą dekompozycji:
 
 ```{r,echo= FALSE}
-acf(prices, main="ACF – ceny")
-
 price_series <- as.numeric(prices$CVX.Close)
-
 decomp <- stl(ts(price_series, frequency = 252), s.window = "periodic")
 plot(decomp)
 ```
 
-Wyniki wskazują, że dominującą strukturę szeregu stanowi trend, natomiast składnik sezonowy jest stosunkowo niewielki. Oznacza to, że w analizowanym okresie ceny akcji Chevron nie wykazują wyraźnej powtarzalnej sezonowości, co jest charakterystyczne dla dziennych danych giełdowych.
+Analiza wykresów dekompozycji wskazuje, że dominującą strukturę szeregu stanowi trend, natomiast składnik sezonowy jest stosunkowo niewielki. Oznacza to, że w analizowanym okresie ceny akcji Chevron nie wykazują wyraźnej powtarzalnej sezonowości, co jest charakterystyczne dla dziennych danych giełdowych.
 
-## Analiza losowośći reszt
+## Analiza reszt modelu trendu
 
 Reszty najlepszego modelu trendu zostały poddane testowi Ljunga–Boxa, który sprawdza, czy isnieje autokorelacja reszt:
 
 ```{r,echo= FALSE}
 residuals_trend <- residuals(best_model)
 
-
-acf(residuals_trend)
+acf(residuals_trend, main="ACF reszt modelu wielomianowego")
 Box.test(residuals_trend, lag=20, type="Ljung-Box")
 ```
 
-Bardzo niska wartość p-value wskazuje, że reszty nie są losowe, co oznacza obecność zależności czasowych niewyjaśnionych przez model trendu. W konsekwencji zasadne jest zastosowanie modeli stochastycznych, takich jak ARIMA, do modelowania średniego poziomu szeregu czasowego.
+Test Ljunga–Boxa dla reszt modelu trendu wykazuje $\text{p-value} < 2.2 \times 10^{−16}$. Odrzucamy hipotezę zerową o braku autokorelacji.\
+**Wniosek**: Reszty nie są białym szumem. Oznacza to, że model deterministyczny (wielomian) nie wyjaśnia dynamiki szeregu. Szereg prawdopodobnie jest niestacjonarny i wymaga podejścia stochastycznego (ARIMA).
 
-## ARIMA
+## Badanie stacjonarności (Test ADF)
+
+Przed zastosowaniem modeli ARIMA, należy formalnie zbadać stacjonarność szeregu za pomocą Rozszerzonego Testu Dickeya-Fullera (ADF).\
+
+Hipotezy:\
+$H_0$: Szereg jest niestacjonarny (posiada pierwiastek jednostkowy).\
+$H_1$: Szereg jest stacjonarny.
+
+```{r,echo= FALSE}
+# Test dla surowych cen
+adf_prices <- adf.test(prices)
+print(adf_prices)
+
+# Test dla pierwszych różnic (log-zwroty)
+adf_returns <- adf.test(returns)
+print(adf_returns)
+```
+
+Interpretacja:\
+
+ 1. Dla cen surowych p-value $\le$ 0.01, co pozwala przyjąć $H_1$. Szereg jest stacjonarny.\
+ 2. Dla log-stóp zwrotu (pierwsze różnice) p-value $\le$ 0.01, co pozwala przyjąć $H_1$.\
+ 
+**Konkluzja**: Szereg jest zintegrowany w stopniu pierwszym (I(1)), co uzasadnia przyjęcie parametru d=1 w modelu ARIMA.
+
+## Modelowanie stochastyczne - ARIMA
 
 ```{r,echo= FALSE}
 auto_arima <- auto.arima(prices)
@@ -123,15 +142,17 @@ checkresiduals(auto_arima)
 
 Dopasowano model **ARIMA(0,1,0),** który najlepiej opisuje strukturę szeregu po uwzględnieniu trendu.
 
+Model ARIMA(0,1,0) to tzw. Błądzenie Losowe (Random Walk). Można go zapisać równaniem: $Y_t = Y_{t-1} + \epsilon_t$, gdzie $\epsilon_t$ to biały szum. Oznacza to, że najlepszą prognozą ceny na jutro jest cena dzisiejsza, a zmiany cen są nieprzewidywalne. Jest to zgodne z Hipotezą Rynku Efektywnego (EMH) w jej słabej formie.
+
 Jakość dopasowania oceniono za pomocą błędów prognozy (RMSE = 2.535, MAE = 1.838) oraz testu Ljunga–Boxa na resztach modelu:
 
-`Q* = 6.5692, df = 10, p-value = 0.7654`
+`Q* = 6.6771, df = 10, p-value = 0.7555`
 
 Wysoka wartość p-value w teście Ljunga–Boxa oznacza, że reszty modelu ARIMA nie wykazują istotnej autokorelacji, co świadczy o poprawnym dopasowaniu modelu. Model ten skutecznie uchwycił zależności czasowe w średniej szeregu, umożliwiając dalszą analizę zmienności i potencjalne prognozy cen.
 
 ### Podsumowanie:
 
-Ceny akcji Chevron w okresie od początku 2022 roku wykazały silny, nieliniowy trend, najlepiej opisany przez wielomian 10 stopnia. Sezonowość była niewielka, a reszty modelu trendu wykazywały istnienie autokorelacji, co uzasadniało zastosowanie modelu ARIMA(0,1,0). Dopasowany model dobrze uchwycił zależności czasowe, a reszty nie wykazywały istotnej autokorelacji, co potwierdził test Ljunga–Boxa.
+Ceny akcji Chevron w okresie od początku 2022 roku wykazały silny, nieliniowy trend, najlepiej opisany przez wielomian 10. stopnia. Reszty modelu trendu wykazywały istnienie autokorelacji, co uzasadniało zastosowanie modelu ARIMA(0,1,0). Dopasowany model dobrze uchwycił zależności czasowe, a reszty nie wykazywały istotnej autokorelacji, co potwierdził test Ljunga–Boxa.
 
 \pagebreak
 
@@ -139,75 +160,99 @@ Ceny akcji Chevron w okresie od początku 2022 roku wykazały silny, nieliniowy 
 
 ### Pobranie danych
 
-Dane cen akcji Valero Energy (VLO) pobrano z serwisu Yahoo Finance od początku 2022 do końca 2024 roku. Do analizy wykorzystano ceny zamknięcia oraz logarytmiczne stopy zwrotu. Ceny zamknięcia stanowią standardową zmienną w badaniach finansowych, a log-stopy zwrotu pozwalają modelować zmienność i stosować modele ARIMA.
+Dane cen akcji Valero Energy (VLO) pobrano z serwisu Yahoo Finance w okresie od 01.01.2022 do 20.01.2026. Do analizy wykorzystano ceny zamknięcia (Close), które są standardem w badaniach finansowych i dobrze odzwierciedlają codzienne wahania wartości akcji. Dodatkowo obliczono logarytmiczne stopy zwrotu, które ułatwiają modelowanie zmienności i stosowanie modeli ARIMA.
 
 ```{r, echo= FALSE, message=FALSE, warning=FALSE,fig.show="hide"}
-getSymbols("VLO", src = "yahoo", from = "2022-01-01")
+getSymbols("VLO", src = "yahoo", from = "2022-01-01", to = "2026-01-21")
 
-# 2. Przygotowanie cen i log-stóp zwrotu
-prices <- Cl(VLO)               # ceny zamknięcia
-returns <- diff(log(prices))[-1] # log-stopy zwrotu
 
-# 3. Wstępny wykres cen
-plot(prices, main="Ceny akcji Valero Energy (VLO)")
-
+prices <- Cl(VLO) # ceny zamknięcia
+returns <- diff(log(prices))[-1] # log‑stopy zwrotu
+plot(prices, type="l", main="Ceny akcji Valero Energy (VLO)")
+t <- 1:length(prices)
 ```
 
 ## Analiza trendu - wybór stopnia wielomianu przez AIC
 
-W celu identyfikacji trendu w szeregu czasowym cen akcji Valero dopasowano modele trendu wielomianowego o stopniach od 1 do 10. Do wyboru najlepszego modelu zastosowano kryterium informacyjne Akaike (AIC).
+W pierwszym kroku podjęto próbę opisu szeregu za pomocą deterministycznego modelu trendu wielomianowego. Do wyboru najlepszego modelu wykorzystano kryterium informacyjne Akaike (AIC).
 
 Uzyskane wartości AIC dla kolejnych stopni wielomianu były następujące:
 
 ```{r,echo= FALSE}
-t <- 1:length(prices)
 AIC_values <- c()
 models <- list()
 
+
 for (i in 1:10) {
-  model <- lm(prices ~ poly(t, i, raw=TRUE))
-  AIC_values[i] <- AIC(model)
-  models[[i]] <- model
+model <- lm(prices ~ poly(t, i, raw=TRUE))
+AIC_values[i] <- AIC(model)
+models[[i]] <- model
 }
 
-# Wyświetlenie AIC i wybór najlepszego modelu
-AIC_values
+cat("Wartości AIC dla kolejnych stopni wielomianu:\n")
+print(AIC_values)
+
 best_degree <- which.min(AIC_values)
-best_degree
+cat("\nNajlepszy stopień wielomianu wg AIC:", best_degree, "\n")
 
 best_model <- models[[best_degree]]
 lines(fitted(best_model), col="blue", lwd=3)
 ```
 
-Najniższą wartość AIC uzyskano dla wielomianu 10. stopnia, co oznacza, że ten model najlepiej opisuje długookresowy trend cen akcji Valero. Trend ma charakter nieliniowy i złożony, typowy dla dziennych danych giełdowych, które reagują na czynniki ekonomiczne, rynkowe i sektorowe.
+**Wnioski i krytyka podejścia**: Najniższą wartość AIC uzyskano dla wielomianu 10. stopnia. Choć matematycznie model ten najlepiej dopasowuje się do danych historycznych, w kontekście finansowym wskazuje to na zjawisko "przeuczenia" (overfitting). Ceny akcji zazwyczaj charakteryzują się trendem stochastycznym (błądzenie losowe), a nie deterministycznym. Wysoki stopień wielomianu próbuje na siłę opisać losowe fluktuacje jako stałe prawo, co zweryfikujemy badając reszty tego modelu.
 
-## Analiza sezonowości
+# Analiza sezonowości
+
+Sezonowość została zbadana za pomocą dekompozycji:
 
 ```{r,echo= FALSE}
-acf(prices, main="ACF – ceny VLO")
-
-price_series <- as.numeric(prices)
-
+price_series <- as.numeric(prices$VLO.Close)
 decomp <- stl(ts(price_series, frequency = 252), s.window = "periodic")
 plot(decomp)
 ```
 
-Analiza funkcji autokorelacji (ACF) oraz dekompozycja STL wykazały, że dominującą strukturę szeregu stanowi trend, natomiast sezonowość jest stosunkowo niewielka.
+Analiza wykresów dekompozycji wskazuje, że dominującą strukturę szeregu stanowi trend, natomiast składnik sezonowy jest stosunkowo niewielki. Oznacza to, że w analizowanym okresie ceny akcji Valero Energy nie wykazują wyraźnej powtarzalnej sezonowości, co jest charakterystyczne dla dziennych danych giełdowych.
 
-## Analiza losowośći reszt
+## Analiza reszt modelu trendu
 
-Reszty najlepszego modelu trendu poddano testowi Ljunga–Boxa:
+Reszty najlepszego modelu trendu zostały poddane testowi Ljunga–Boxa, który sprawdza, czy isnieje autokorelacja reszt:
 
 ```{r,echo= FALSE}
 residuals_trend <- residuals(best_model)
 
-acf(residuals_trend, main="ACF reszt")
+acf(residuals_trend, main="ACF reszt modelu wielomianowego")
 Box.test(residuals_trend, lag=20, type="Ljung-Box")
 ```
 
-Bardzo niska wartość p-value wskazuje, że reszty nie są losowe, co oznacza, że w szeregu występują zależności czasowe niewyjaśnione przez sam trend. W związku z tym zasadne jest zastosowanie modeli, takich jak ARIMA, do modelowania średniej szeregu.
+Test Ljunga–Boxa dla reszt modelu trendu wykazuje $\text{p-value} < 2.2 \times 10^{−16}$. Odrzucamy hipotezę zerową o braku autokorelacji.\
+**Wniosek**: Reszty nie są białym szumem. Oznacza to, że model deterministyczny (wielomian) nie wyjaśnia dynamiki szeregu. Szereg prawdopodobnie jest niestacjonarny i wymaga podejścia stochastycznego (ARIMA).
 
-## ARIMA
+## Badanie stacjonarności (Test ADF)
+
+Przed zastosowaniem modeli ARIMA, należy formalnie zbadać stacjonarność szeregu za pomocą Rozszerzonego Testu Dickeya-Fullera (ADF).\
+
+Hipotezy:\
+$H_0$: Szereg jest niestacjonarny (posiada pierwiastek jednostkowy).\
+$H_1$: Szereg jest stacjonarny.
+
+```{r,echo= FALSE}
+# Test dla surowych cen
+adf_prices <- adf.test(prices)
+print(adf_prices)
+
+# Test dla pierwszych różnic (log-zwroty)
+adf_returns <- adf.test(returns)
+print(adf_returns)
+```
+
+Interpretacja:\
+
+ 1. Dla cen surowych p-value > 0.05, co oznacza brak podstaw do odrzucenia $H_0$. Szereg jest niestacjonarny.\
+ 2. Dla log-stóp zwrotu (pierwsze różnice) p-value $\le$ 0.01, co pozwala przyjąć $H_1$.\
+ 
+**Konkluzja**: Szereg jest zintegrowany w stopniu pierwszym (I(1)), co uzasadnia przyjęcie parametru d=1 w modelu ARIMA.
+
+## Modelowanie stochastyczne - ARIMA
 
 ```{r,echo= FALSE}
 auto_arima <- auto.arima(prices)
@@ -215,14 +260,16 @@ summary(auto_arima)
 checkresiduals(auto_arima)
 ```
 
-Dopasowano model ARIMA(0,1,0), który najlepiej opisuje strukturę szeregu po uwzględnieniu trendu.
+Dopasowano model **ARIMA(0,1,0),** który najlepiej opisuje strukturę szeregu po uwzględnieniu trendu.
 
-Jakość dopasowania oceniono za pomocą miar błędów prognozy (RMSE = 3.022, MAE = 2.247) oraz testu Ljunga–Boxa na resztach modelu:
+Model ARIMA(0,1,0) to tzw. Błądzenie Losowe (Random Walk). Można go zapisać równaniem: $Y_t = Y_{t-1} + \epsilon_t$, gdzie $\epsilon_t$ to biały szum. Oznacza to, że najlepszą prognozą ceny na jutro jest cena dzisiejsza, a zmiany cen są nieprzewidywalne. Jest to zgodne z Hipotezą Rynku Efektywnego (EMH) w jej słabej formie.
 
-`Q* = 1.3432, df = 10, p-value = 0.9993`
+Jakość dopasowania oceniono za pomocą błędów prognozy (RMSE = 3.021, MAE = 2.246) oraz testu Ljunga–Boxa na resztach modelu:
 
-Wysoka wartość p-value w teście Ljunga–Boxa oznacza, że reszty modelu ARIMA nie wykazują istotnej autokorelacji, są białym szumem, co świadczy o dobrym dopasowaniu modelu. ARIMA skutecznie uchwyciła zależności czasowe w średniej szeregu.
+`Q* = 1.2448, df = 10, p-value = 0.9995`
+
+Wysoka wartość p-value w teście Ljunga–Boxa oznacza, że reszty modelu ARIMA nie wykazują istotnej autokorelacji, co świadczy o poprawnym dopasowaniu modelu. Model ten skutecznie uchwycił zależności czasowe w średniej szeregu, umożliwiając dalszą analizę zmienności i potencjalne prognozy cen.
 
 ### Podsumowanie
 
-Ceny akcji Valero Energy również wykazały nieliniowy trend, najlepiej opisany przez wielomian 10. stopnia. Sezonowość była słaba, a reszty trendu nie były losowe, co uzasadniało zastosowanie ARIMA(0,1,0). Dopasowany model dobrze uchwycił dynamikę średniego poziomu cen, a reszty nie wykazały autokorelacji (p-value w teście Ljunga–Boxa równe 0.9993), co potwierdza poprawność modelu.
+Ceny akcji Valero Energy również wykazały nieliniowy trend, najlepiej opisany przez wielomian 10. stopnia. Sezonowość była słaba, a reszty trendu nie były losowe, co uzasadniało zastosowanie ARIMA(0,1,0). Dopasowany model dobrze uchwycił dynamikę średniego poziomu cen, a reszty nie wykazały autokorelacji (p-value w teście Ljunga–Boxa równe 0.9995), co potwierdza poprawność modelu.
